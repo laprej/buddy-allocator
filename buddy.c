@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
-#include <ross.h>
 #include "buddy.h"
 
 /**
@@ -86,7 +85,7 @@ int buddy_try_merge(buddy_list_t *blt)
     while (1) {
         unsigned long pointer_as_long = (unsigned long)blt;
         unsigned int size = blt->size + sizeof(buddy_list_t);
-        buddy_list_bucket_t *blbt = g_tw_buddy_master;
+        buddy_list_bucket_t *blbt = buddy_base_address;
         // Find the bucket we need
         while (size > (1 << blbt->order)) {
             blbt++;
@@ -143,14 +142,14 @@ void buddy_free(void *ptr)
     unsigned int size = blt->size + sizeof(buddy_list_t);
 
     // Find the bucket we need
-    buddy_list_bucket_t *blbt = g_tw_buddy_master;
+    buddy_list_bucket_t *blbt = buddy_base_address;
     while (size > (1 << blbt->order)) {
         blbt++;
     }
 
     if (blt->use != USED) {
         buddy_list_t *iter;
-        tw_printf(TW_LOC, "warning: double free buddy");
+        printf("warning: double free buddy");
         // If it's free, it should be in the correct bucket so let's see
         LIST_FOREACH(iter, &blbt->ptr, next_freelist) {
             if (blt == iter) {
@@ -239,12 +238,13 @@ void *buddy_alloc(unsigned size)
     size = next_power2(size);
 
     // Find the bucket we need
-    buddy_list_bucket_t *blbt = g_tw_buddy_master;
+    buddy_list_bucket_t *blbt = buddy_base_address;
     while (size > (1 << blbt->order)) {
         blbt++;
         if (blbt->is_valid == INVALID) {
             // Error: we're out of bound for valid BLBTs
-            tw_error(TW_LOC, "Increase buddy_size");
+            printf("Increase buddy_size");
+	    abort();
         }
     }
 
@@ -256,7 +256,8 @@ void *buddy_alloc(unsigned size)
             blbt++;
             if (blbt->is_valid == INVALID) {
                 // Error: we're out of bound for valid BLBTs
-                tw_error(TW_LOC, "Increase buddy_size");
+	        printf("Increase buddy_size");
+		abort();
             }
             split_count++;
         }
@@ -268,7 +269,8 @@ void *buddy_alloc(unsigned size)
 
     if (LIST_EMPTY(&blbt->ptr)) {
         // This is bad -- they should have allocated more memory
-        tw_error(TW_LOC, "Increase buddy_size");
+	printf("Increase buddy_size");
+	abort();
     }
     buddy_list_t *blt = LIST_FIRST(&blbt->ptr);
     assert(blt && "LIST_FIRST returned NULL");
@@ -299,7 +301,7 @@ buddy_list_bucket_t * create_buddy_table(unsigned int power_of_two)
 
     list_count = power_of_two - BUDDY_BLOCK_ORDER + 1;
 
-    bsystem = (buddy_list_bucket_t *)tw_calloc(TW_LOC, "buddy system", list_count + 1, sizeof(buddy_list_bucket_t));
+    bsystem = (buddy_list_bucket_t *)calloc(list_count + 1, sizeof(buddy_list_bucket_t));
     if (bsystem == NULL) {
         return NULL;
     }
@@ -314,7 +316,7 @@ buddy_list_bucket_t * create_buddy_table(unsigned int power_of_two)
 
     // Allocate the memory
     size = 1 << power_of_two;
-    buddy_base_address = tw_calloc(TW_LOC, "buddy system", 1, size);
+    buddy_base_address = calloc(1, size);
     if (buddy_base_address == NULL) {
         free(bsystem);
         return NULL;
